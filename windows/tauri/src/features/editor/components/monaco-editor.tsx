@@ -37,21 +37,10 @@ import { useActiveWorkspaceId } from "@/features/workspace/stores/create-workspa
 import { useGitBlame } from "@/features/git/hooks/use-git-blame";
 import { keymapRegistry } from "@/features/keymaps/utils/registry";
 import { useSettingsStore } from "@/features/settings/stores/settings.store";
-import { openMavenRunPane } from "@/features/maven/actions/maven-tool-window-actions";
-import {
-  canRunMavenTest,
-  runMavenTestAction,
-} from "@/features/maven/services/maven-test-actions";
-import {
-  javaTestMethodAtLine,
-  type JavaTestMethod,
-} from "@/features/maven/utils/maven-test-selection";
-import { useJavaTestMethods } from "@/features/maven/hooks/use-java-test-methods";
 import { recordStartupMilestone } from "@/features/bootstrap/startup-performance";
 import { useVimStore } from "@/features/vim/stores/vim.store";
 import { formatRelativeTime } from "@/utils/date";
 import { frontendTrace } from "@/utils/frontend-trace";
-import { LspOperationLog } from "@/platform/lsp-session-lifecycle";
 import { isNativeTextInputTarget } from "@/utils/keyboard/text-input-target";
 import { getRelativePath, pathStartsWithRoot } from "@/utils/path-helpers";
 import EditorContextMenu from "../context-menu/context-menu";
@@ -122,20 +111,6 @@ import { useMonacoEditorSettings } from "../engines/monaco/use-monaco-editor-set
 import { registerMonacoVimCommands, toEditorVimMode } from "../engines/monaco/vim-commands";
 import { registerMonacoLspProviders } from "../engines/monaco/lsp-providers";
 import { registerMonacoCodeLensProvider } from "../engines/monaco/code-lens-provider";
-import { LspClient } from "../lsp/lsp-client";
-import { loadJavaNavigationMarkers } from "../lsp/java-navigation-marker-loader";
-import { isTransientJavaMarkerError, normalizeLspError } from "../lsp/lsp-request-error";
-import { useLspStore } from "../lsp/stores/lsp.store";
-import {
-  implementationMarkerAtLine,
-  implementationMarkerDecorations,
-  implementationMarkersForBuffer,
-  javaMarkerRefreshRevision,
-  javaMarkerRetryDelay,
-  JAVA_IMPLEMENTATION_GLYPH_CLASS,
-} from "../engines/monaco/java-implementation-markers";
-import type { JavaImplementationMarker } from "../lsp/java-navigation-models";
-import { toast } from "sonner";
 
 registerMonacoLspProviders();
 registerMonacoCodeLensProvider();
@@ -313,15 +288,9 @@ export function MonacoEditor({
   const previousContentRef = useRef("");
   const pendingLocalContentSnapshotsRef = useRef<string[]>([]);
   const decorationsRef = useRef<string[]>([]);
-  const implementationDecorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(
-    null,
-  );
-  const implementationMarkerOwnerRef = useRef<string | null>(null);
-  const implementationMarkersRef = useRef<JavaImplementationMarker[]>([]);
   const gitBlameWidgetRef = useRef<InlineGitBlameWidget | null>(null);
   const gitBlameRenderFrameRef = useRef<number | null>(null);
   const renderedGitBlameKeyRef = useRef<string | null>(null);
-  const javaTestMethodsRef = useRef<JavaTestMethod[]>([]);
   const renderInlineGitBlameRef = useRef<() => void>(() => {});
   const mouseSelectingRef = useRef(false);
   const mouseGestureStartRef = useRef<CursorHistoryEntry | null>(null);
@@ -394,7 +363,6 @@ export function MonacoEditor({
   );
   const languageId = documentTarget.languageId ?? getLanguageIdFromPath(filePath);
   const monacoLanguageId = toMonacoLanguageId(languageId);
-  const [mavenTestsAvailable, setMavenTestsAvailable] = useState(false);
   const {
     fontFamily,
     fontSize,
@@ -421,23 +389,9 @@ export function MonacoEditor({
   const codeLens = useSettingsStore((state) => state.settings.codeLens);
   const inlayHints = useSettingsStore((state) => state.settings.inlayHints);
   const semanticTokens = useSettingsStore((state) => state.settings.semanticTokens);
-  const javaMarkerRevision = useLspStore((state) =>
-    javaMarkerRefreshRevision(state.lspStatus),
-  );
   const inlineGitBlameEnabled = useSettingsStore((state) => state.settings.enableInlineGitBlame);
   const workspaceId = useActiveWorkspaceId();
   const rootFolderPath = useFileSystemStore((state) => state.rootFolderPath);
-  const javaTestScope = useMemo(
-    () => (rootFolderPath ? { workspaceId, root: rootFolderPath } : null),
-    [rootFolderPath, workspaceId],
-  );
-  const javaTestMethods = useJavaTestMethods(
-    javaTestScope,
-    filePath,
-    content,
-    mavenTestsAvailable,
-  );
-  javaTestMethodsRef.current = javaTestMethods;
   const workspaceFolders = useFileSystemStore((state) => state.workspaceFolders);
   const vimModeEnabled = useSettingsStore((state) => state.settings.vimMode);
   const vimRelativeLineNumbers = useSettingsStore((state) => state.settings.vimRelativeLineNumbers);
@@ -526,22 +480,6 @@ export function MonacoEditor({
     return getRelativePath(filePath, workspaceRoot);
   }, [filePath, rootFolderPath, workspaceFolders]);
 
-  useEffect(() => {
-    if (!rootFolderPath || !filePath || !/\.java$/i.test(filePath)) {
-      setMavenTestsAvailable(false);
-      return;
-    }
-
-    let cancelled = false;
-    setMavenTestsAvailable(false);
-    void canRunMavenTest(rootFolderPath, filePath).then((available) => {
-      if (!cancelled) setMavenTestsAvailable(available);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [filePath, rootFolderPath]);
   const modelUri = useMemo(
     () => createModelUri(activeBufferId ?? undefined, filePath, modelDisplayPath),
     [activeBufferId, filePath, modelDisplayPath],
@@ -713,37 +651,10 @@ export function MonacoEditor({
     x: number;
     y: number;
   } | null>(null);
-  const [contextMenuTestMethod, setContextMenuTestMethod] = useState<JavaTestMethod | null>(null);
-  const [implementationMarkers, setImplementationMarkers] = useState<JavaImplementationMarker[]>(
-    [],
-  );
 
   const executeEditorCommand = useCallback((commandId: string) => {
     void keymapRegistry.executeCommand(commandId);
   }, []);
-
-  const runMavenTestFromEditor = useCallback(
-    (method?: string) => {
-      if (!filePath) return;
-      setContextMenuPosition(null);
-      setContextMenuTestMethod(null);
-      openMavenRunPane();
-      void runMavenTestAction(filePath, method, workspaceId).catch((error) => {
-        toast.error(error instanceof Error ? error.message : "Unable to run Maven test.");
-      });
-    },
-    [filePath, workspaceId],
-  );
-
-  const runTestClassFromEditor = useCallback(() => {
-    runMavenTestFromEditor();
-  }, [runMavenTestFromEditor]);
-
-  const runTestMethodFromEditor = useCallback(() => {
-    const method = contextMenuTestMethod?.name;
-    if (!method) return;
-    runMavenTestFromEditor(method);
-  }, [contextMenuTestMethod, runMavenTestFromEditor]);
 
   const triggerMonacoAction = useCallback(
     (actionId: string) => {
@@ -872,7 +783,7 @@ export function MonacoEditor({
       // monospace width cache places the caret one column left of the click.
       disableMonospaceOptimizations: true,
       selectOnLineNumbers: true,
-      glyphMargin: enableExpensiveServicesRef.current && monacoLanguageId === "java",
+      glyphMargin: false,
       stickyScroll: { enabled: editorStickyScroll },
       bracketPairColorization: { enabled: editorBracketPairColorization },
       smoothScrolling: editorSmoothScrolling,
@@ -914,8 +825,7 @@ export function MonacoEditor({
 
     editorRef.current = editor;
     modelRef.current = model;
-    const implementationDecorations = editor.createDecorationsCollection();
-    implementationDecorationsRef.current = implementationDecorations;
+
     previousContentRef.current = content;
     pendingLocalContentSnapshotsRef.current = [];
     if (filePath && fileOpenBenchmark.has(filePath)) {
@@ -1092,17 +1002,8 @@ export function MonacoEditor({
       editor.onContextMenu((event) => {
         event.event.preventDefault();
         event.event.stopPropagation();
-        setContextMenuTestMethod(null);
 
         if (event.target.position) {
-          setContextMenuTestMethod(
-            /\.java$/i.test(filePath)
-              ? javaTestMethodAtLine(
-                  javaTestMethodsRef.current,
-                  event.target.position.lineNumber - 1,
-                )
-              : null,
-          );
           const currentSelection = editor.getSelection();
           if (!currentSelection?.containsPosition(event.target.position)) {
             editor.setPosition(event.target.position);
@@ -1168,36 +1069,6 @@ export function MonacoEditor({
       editor.onMouseDown((event) => {
         if (!isCurrentEditorSurface()) return;
         const mouseEvent = event.event;
-        const markerElement = event.target.element;
-        if (
-          event.target.type === monacoEditor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
-          event.target.position &&
-          markerElement?.classList.contains(JAVA_IMPLEMENTATION_GLYPH_CLASS)
-        ) {
-          const marker = implementationMarkerAtLine(
-            implementationMarkersRef.current,
-            event.target.position.lineNumber,
-            event.target.detail.glyphMarginLane,
-          );
-          if (marker) {
-            mouseEvent.preventDefault();
-            mouseEvent.stopPropagation();
-            mouseSelectingRef.current = false;
-            mouseGestureStartRef.current = null;
-            editor.setPosition({
-              lineNumber: marker.line + 1,
-              column: marker.utf16Column + 1,
-            });
-            syncCursorAndSelection();
-            void keymapRegistry.executeCommand(
-              marker.direction === "down"
-                ? "editor.goToImplementation"
-                : "editor.goToSuperMethod",
-              { marker },
-            );
-            return;
-          }
-        }
         if (
           isEditorGoToDefinitionModifierClick(mouseEvent) &&
           event.target.type === monacoEditor.MouseTargetType.CONTENT_TEXT &&
@@ -1412,12 +1283,6 @@ export function MonacoEditor({
       vimAdapterRef.current = null;
       vimStatusRef.current?.remove();
       vimStatusRef.current = null;
-      implementationDecorations.clear();
-      if (implementationDecorationsRef.current === implementationDecorations) {
-        implementationDecorationsRef.current = null;
-      }
-      implementationMarkerOwnerRef.current = null;
-      implementationMarkersRef.current = [];
       persistMonacoSurfaceViewState(editor, viewStateKey ?? activeBufferId ?? "");
       if (editorRef.current === editor) editorRef.current = null;
       if (modelRef.current === model) modelRef.current = null;
@@ -1709,158 +1574,6 @@ export function MonacoEditor({
     monacoEditor.setModelLanguage(model, monacoLanguageId);
   }, [monacoLanguageId]);
 
-  // Rust Core combines JDT LS CodeLens and semantic navigation results into
-  // the four relationship/direction variants rendered by this UI layer.
-  //
-  // The request is issued directly rather than through Monaco's codeLens
-  // provider: Monaco only invokes a provider when it intends to render inline
-  // lens text, so hooking the gutter into that lifecycle leaves the icons
-  // dependent on a callback that may never fire. The React store revision is
-  // read during render so startup transitions cannot be missed between mount
-  // and effect subscription.
-  useEffect(() => {
-    implementationMarkerOwnerRef.current = null;
-    implementationMarkersRef.current = [];
-    implementationDecorationsRef.current?.clear();
-    frontendTrace("debug", "java.gutter.effect", filePath, {
-      enableExpensiveServices,
-      monacoLanguageId,
-      hasBufferId: Boolean(editorBufferId),
-      hasFilePath: Boolean(filePath),
-      hasWorkspaceRoot: Boolean(rootFolderPath),
-    });
-    if (
-      !enableExpensiveServices ||
-      monacoLanguageId !== "java" ||
-      !editorBufferId ||
-      !filePath ||
-      !rootFolderPath
-    ) {
-      setImplementationMarkers([]);
-      return;
-    }
-
-    type MarkerRefreshState =
-      | { phase: "idle" }
-      | { phase: "scheduled"; timerId: number }
-      | { phase: "running"; operation: LspOperationLog }
-      | { phase: "disposed" };
-    const owner: { state: MarkerRefreshState; retryAttempt: number } = {
-      state: { phase: "idle" },
-      retryAttempt: 0,
-    };
-    const isDisposed = () => owner.state.phase === "disposed";
-    const lspClient = LspClient.getInstance();
-
-    const refreshMarkers = async () => {
-      if (isDisposed()) return;
-      const model = modelRef.current;
-      if (!model || model.isDisposed()) return;
-      const operation = new LspOperationLog("javaNavigationMarkers", crypto.randomUUID(), {
-        bufferId: editorBufferId,
-        filePath,
-        hasDocumentUri: Boolean(documentTarget.documentUri),
-        retryAttempt: owner.retryAttempt,
-      });
-      owner.state = { phase: "running", operation };
-      try {
-        const markers = await loadJavaNavigationMarkers({
-          client: lspClient,
-          target: documentTarget,
-          workspaceScope: { workspaceId, root: rootFolderPath },
-          content: acquireEditorModelSource(model, previousContentRef.current).content,
-        });
-        if (isDisposed()) {
-          operation.cancelled("editor-owner-disposed");
-          return;
-        }
-        if (model.isDisposed() || modelRef.current !== model) {
-          operation.cancelled("editor-model-replaced");
-          return;
-        }
-
-        implementationMarkerOwnerRef.current = editorBufferId;
-        implementationMarkersRef.current = markers;
-        setImplementationMarkers(markers);
-        operation.succeeded({ markerCount: markers.length });
-      } catch (error) {
-        if (isDisposed()) operation.cancelled("editor-owner-disposed");
-        else if (normalizeLspError(error).code === "timed_out") operation.timedOut();
-        else if (isTransientJavaMarkerError(error)) operation.cancelled("transient-jdtls-state");
-        else operation.failed(error);
-        throw error;
-      } finally {
-        if (owner.state.phase === "running" && owner.state.operation === operation) {
-          owner.state = { phase: "idle" };
-        }
-      }
-    };
-
-    const scheduleRefresh = (delayMilliseconds = 180) => {
-      if (isDisposed()) return;
-      if (owner.state.phase === "scheduled") window.clearTimeout(owner.state.timerId);
-      // Match the macOS editor delay: a typing burst should produce one marker
-      // batch for the settled document version, not one batch per keystroke.
-      const timerId = window.setTimeout(() => {
-        if (owner.state.phase !== "scheduled" || owner.state.timerId !== timerId) return;
-        owner.state = { phase: "idle" };
-        void refreshMarkers().catch((error) => {
-          if (isDisposed()) return;
-          if (isTransientJavaMarkerError(error)) {
-            const retryDelay = javaMarkerRetryDelay(owner.retryAttempt);
-            if (retryDelay !== null) {
-              owner.retryAttempt += 1;
-              frontendTrace("info", "java.gutter.retry", filePath, {
-                attempt: owner.retryAttempt,
-                delayMilliseconds: retryDelay,
-                reason: error instanceof Error ? error.message : String(error),
-              });
-              scheduleRefresh(retryDelay);
-              return;
-            }
-          }
-          frontendTrace("warn", "java.gutter.resolve", filePath, {
-            error: error instanceof Error ? error.message : String(error),
-            retriesExhausted: isTransientJavaMarkerError(error),
-          });
-        });
-      }, delayMilliseconds);
-      owner.state = { phase: "scheduled", timerId };
-    };
-
-    // JDTLS answers codeLens only once its index is ready, so the render-level
-    // revision re-runs this owner when the session or document lifecycle moves.
-    scheduleRefresh();
-
-    return () => {
-      const state = owner.state;
-      owner.state = { phase: "disposed" };
-      if (state.phase === "scheduled") window.clearTimeout(state.timerId);
-      if (state.phase === "running") state.operation.cancelled("editor-owner-disposed");
-    };
-  }, [
-    documentTarget,
-    editorBufferId,
-    enableExpensiveServices,
-    filePath,
-    javaMarkerRevision,
-    monacoLanguageId,
-    rootFolderPath,
-    workspaceId,
-  ]);
-
-  useEffect(() => {
-    const visibleMarkers = implementationMarkersForBuffer(
-      implementationMarkers,
-      implementationMarkerOwnerRef.current,
-      editorBufferId,
-    );
-    implementationMarkersRef.current = visibleMarkers;
-    implementationDecorationsRef.current?.set(
-      implementationMarkerDecorations(visibleMarkers),
-    );
-  }, [editorBufferId, implementationMarkers]);
-
   useEffect(() => {
     const model = modelRef.current;
     if (!model) return;
@@ -2026,7 +1739,7 @@ export function MonacoEditor({
       },
       occurrencesHighlight: highlightOccurrences ? "singleFile" : "off",
       selectionHighlight: highlightOccurrences,
-      glyphMargin: enableExpensiveServices && monacoLanguageId === "java",
+      glyphMargin: false,
       quickSuggestions: autoCompletion,
       suggestOnTriggerCharacters: autoCompletion,
       parameterHints: { enabled: enableExpensiveServices && parameterHints },
@@ -2303,7 +2016,6 @@ export function MonacoEditor({
             position={contextMenuPosition}
             onClose={() => {
               setContextMenuPosition(null);
-              setContextMenuTestMethod(null);
             }}
             onCopy={() => executeEditorCommand("editor.copy")}
             onCut={canEdit ? () => executeEditorCommand("editor.cut") : undefined}
@@ -2344,12 +2056,6 @@ export function MonacoEditor({
             onShowHover={() => executeEditorCommand("editor.showHover")}
             onTriggerSuggest={
               canEdit ? () => executeEditorCommand("editor.triggerSuggest") : undefined
-            }
-            onRunTestClass={
-              mavenTestsAvailable ? runTestClassFromEditor : undefined
-            }
-            onRunTestMethod={
-              mavenTestsAvailable && contextMenuTestMethod ? runTestMethodFromEditor : undefined
             }
           />,
           document.body,

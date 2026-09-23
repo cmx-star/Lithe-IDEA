@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { WorkbenchFullscreenSurface } from "@/features/window/components/workbench-fullscreen-surface";
 import { workspaceRuntimeRegistry } from "@/features/workspace/runtime/workspace-runtime-registry";
 import { WorkspaceStoreScopeContext } from "@/features/workspace/stores/create-workspace-scoped-store";
@@ -7,12 +7,13 @@ import { cn } from "@/utils/cn";
 import { usePaneStore } from "../stores/pane.store";
 import { findPaneGroup } from "../utils/pane-tree";
 import { PaneContainer } from "./pane-container";
-import { PaneNodeRenderer } from "./pane-node-renderer";
 
 function SplitViewRoot({ activeSurface = true }: { activeSurface?: boolean }) {
   const root = usePaneStore.use.root();
+  const activePaneId = usePaneStore.use.activePaneId();
   const fullscreenPaneId = usePaneStore.use.fullscreenPaneId();
   const exitPaneFullscreen = usePaneStore((state) => state.actions.exitPaneFullscreen);
+  const collapseEditorGroups = usePaneStore((state) => state.actions.collapseEditorGroups);
   const fullscreenPane = usePaneStore((state) =>
     state.fullscreenPaneId
       ? (findPaneGroup(state.root, state.fullscreenPaneId) ??
@@ -26,13 +27,21 @@ function SplitViewRoot({ activeSurface = true }: { activeSurface?: boolean }) {
     }
   }, [exitPaneFullscreen, fullscreenPane, fullscreenPaneId]);
 
+  useLayoutEffect(() => {
+    if (root.type === "split") {
+      collapseEditorGroups();
+    }
+  }, [collapseEditorGroups, root.type]);
+
+  const activePane = findPaneGroup(root, activePaneId) ?? findPaneGroup(root, "root-pane");
+
   return (
     <>
       <div className="size-full overflow-hidden">
-        <PaneNodeRenderer node={root} hiddenPaneId={fullscreenPaneId} />
+        {activePane ? <PaneContainer pane={activePane} /> : null}
       </div>
 
-      {activeSurface && fullscreenPane && (
+      {activeSurface && root.type === "group" && fullscreenPane && (
         <WorkbenchFullscreenSurface>
           <PaneContainer pane={fullscreenPane} />
         </WorkbenchFullscreenSurface>

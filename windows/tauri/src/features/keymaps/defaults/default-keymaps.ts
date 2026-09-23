@@ -327,7 +327,6 @@ export const defaultKeymaps: Keybinding[] = [
   },
   { key: "cmd+e", command: "workbench.toggleSidebar", source: "default" },
   { key: "cmd+j", command: "workbench.toggleTerminal", source: "default" },
-  { key: "shift+f10", command: "workbench.toggleRun", source: "default" },
   { key: "cmd+`", command: "workbench.toggleTerminalAlt", source: "default" },
   {
     key: "cmd+shift+j",
@@ -373,14 +372,6 @@ export const defaultKeymaps: Keybinding[] = [
     command: "workbench.showSourceControl",
     source: "default",
   },
-  {
-    key: "cmd+shift+d",
-    command: "workbench.showDebugger",
-    source: "default",
-  },
-  { key: "F5", command: "debug.start", source: "default" },
-  { key: "shift+F5", command: "debug.stop", source: "default" },
-  { key: "F9", command: "debug.toggleBreakpoint", source: "default" },
   {
     key: "cmd+shift+space",
     command: "workbench.agentLauncher",

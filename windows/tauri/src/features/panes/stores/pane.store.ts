@@ -4,7 +4,7 @@ import { createStore } from "zustand/vanilla";
 import { createWorkspaceScopedStore } from "@/features/workspace/stores/create-workspace-scoped-store";
 import { createSelectors } from "@/utils/zustand-selectors";
 import { BOTTOM_PANE_ID, ROOT_PANE_ID } from "../constants/pane";
-import type { PaneGroup, PaneNode, SplitDirection, SplitPlacement } from "../types/pane.types";
+import type { PaneGroup, PaneNode } from "../types/pane.types";
 import {
   addBufferToPane,
   closePane,
@@ -25,7 +25,6 @@ import {
   setPaneBufferPinnedEverywhere,
   setPaneLocked,
   setPanePreviewBuffer,
-  splitPane,
   reorderPaneBuffers,
   updatePaneSizes,
 } from "../utils/pane-tree";
@@ -40,12 +39,6 @@ interface PaneState {
 }
 
 interface PaneActions {
-  splitPane: (
-    paneId: string,
-    direction: SplitDirection,
-    bufferId?: string,
-    placement?: SplitPlacement,
-  ) => string | null;
   closePane: (paneId: string) => void;
   setActivePane: (paneId: string) => void;
   activatePaneBuffer: (paneId: string, bufferId: string | null) => void;
@@ -76,6 +69,7 @@ interface PaneActions {
   togglePaneFullscreen: (paneId: string) => void;
   exitPaneFullscreen: () => void;
   restoreLayout: (layout: PaneLayoutSnapshot) => void;
+  collapseEditorGroups: () => void;
   reset: () => void;
 }
 
@@ -162,14 +156,6 @@ function collectPaneIds(root: PaneNode, paneIds: string[]) {
   collectPaneIds(root.children[1], paneIds);
 }
 
-function findPaneNotInSet(root: PaneNode, paneIds: Set<string>): PaneGroup | null {
-  if (root.type === "group") {
-    return paneIds.has(root.id) ? null : root;
-  }
-
-  return findPaneNotInSet(root.children[0], paneIds) ?? findPaneNotInSet(root.children[1], paneIds);
-}
-
 function getPaneIds(state: Pick<PaneState, "root" | "bottomRoot">) {
   const paneIds = new Set<string>();
   addPaneIds(state.root, paneIds);
@@ -219,6 +205,29 @@ function setMostRecentActivePane(state: PaneState, paneId: string) {
   state.mostRecentActivePaneIds = nextPaneIds;
 }
 
+function collapseEditorGroups(root: PaneNode): PaneGroup {
+  const editorPanes = getAllPaneGroups(root);
+  const bufferIds = Array.from(new Set(editorPanes.flatMap((pane) => pane.bufferIds)));
+  const bufferIdSet = new Set(bufferIds);
+  const activeBufferId =
+    editorPanes.find((pane) => pane.id === ROOT_PANE_ID)?.activeBufferId ??
+    editorPanes.find((pane) => pane.activeBufferId)?.activeBufferId ??
+    null;
+
+  return {
+    id: ROOT_PANE_ID,
+    type: "group",
+    bufferIds,
+    activeBufferId: activeBufferId && bufferIdSet.has(activeBufferId) ? activeBufferId : null,
+    mruBufferIds: Array.from(
+      new Set(editorPanes.flatMap((pane) => pane.mruBufferIds ?? [])),
+    ).filter((bufferId) => bufferIdSet.has(bufferId)),
+    pinnedBufferIds: Array.from(
+      new Set(editorPanes.flatMap((pane) => pane.pinnedBufferIds ?? [])),
+    ).filter((bufferId) => bufferIdSet.has(bufferId)),
+  };
+}
+
 function getFallbackActivePaneId(state: PaneState) {
   const paneIds = getPaneIds(state);
   return (
@@ -241,31 +250,6 @@ const createPaneStore = () =>
     immer((set, get) => ({
       ...initialState,
       actions: {
-        splitPane: (paneId, direction, bufferId, placement = "after") => {
-          let newPaneId: string | null = null;
-          set((state) => {
-            const targetTree = getTreeForPane(state, paneId);
-            const currentTree = targetTree === "root" ? state.root : state.bottomRoot;
-            const existingPaneIds = new Set<string>();
-            addPaneIds(currentTree, existingPaneIds);
-            const nextTree = splitPane(currentTree, paneId, direction, bufferId, placement);
-            if (nextTree !== currentTree) {
-              if (targetTree === "root") {
-                state.root = nextTree;
-              } else {
-                state.bottomRoot = nextTree;
-              }
-              const newPane = findPaneNotInSet(nextTree, existingPaneIds);
-              if (newPane) {
-                newPaneId = newPane.id;
-                state.activePaneId = newPane.id;
-                setMostRecentActivePane(state, newPane.id);
-              }
-            }
-          });
-          return newPaneId;
-        },
-
         closePane: (paneId) => {
           set((state) => {
             const targetTree = getTreeForPane(state, paneId);
@@ -628,6 +612,24 @@ const createPaneStore = () =>
             state.activePaneId = activePane?.id ?? getFallbackActivePaneId(state);
             state.fullscreenPaneId = fullscreenPane?.id ?? null;
             setMostRecentActivePane(state, state.activePaneId);
+          });
+        },
+
+        collapseEditorGroups: () => {
+          set((state) => {
+            if (state.root.type === "group" && state.root.id === ROOT_PANE_ID) return;
+
+            const activeEditorPane = findPaneGroup(state.root, state.activePaneId);
+            const root = collapseEditorGroups(state.root);
+            if (activeEditorPane?.activeBufferId && root.bufferIds.includes(activeEditorPane.activeBufferId)) {
+              root.activeBufferId = activeEditorPane.activeBufferId;
+            }
+            state.root = root;
+            if (activeEditorPane) {
+              state.activePaneId = ROOT_PANE_ID;
+              setMostRecentActivePane(state, ROOT_PANE_ID);
+            }
+            state.fullscreenPaneId = null;
           });
         },
 

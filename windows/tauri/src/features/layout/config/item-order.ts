@@ -2,16 +2,12 @@ export const SIDEBAR_ACTIVITY_ITEM_IDS = [
   "files",
   "git",
   "search",
-  "maven",
-  "run",
   "terminal",
   "diagnostics",
   "gitLog",
   "settings",
 ] as const;
 export const SIDEBAR_BOTTOM_ACTIVITY_ITEM_IDS = [
-  "maven",
-  "run",
   "terminal",
   "diagnostics",
   "gitLog",

@@ -317,9 +317,6 @@ const WindowMenuBar = ({
           <MenubarItem onClick={() => handleCommand("workbench.showGitHub")}>
             {t("menu.github")}
           </MenubarItem>
-          <MenubarItem onClick={() => handleCommand("workbench.showDebugger")}>
-            {t("menu.runAndDebug")}
-          </MenubarItem>
           <MenubarSeparator />
           <MenubarItem onClick={() => handleClickEmit("menu_split_editor")}>
             {t("menu.splitEditor")}
@@ -421,19 +418,6 @@ const WindowMenuBar = ({
           </MenubarItem>
           <MenubarItem onClick={() => handleCommand("terminal.close")}>
             {t("menu.closeTerminal")}
-          </MenubarItem>
-        </MenubarContent>
-      ),
-      Run: (
-        <MenubarContent>
-          <MenubarItem shortcut="f5" onClick={() => handleCommand("debug.start")}>
-            {t("menu.startDebugging")}
-          </MenubarItem>
-          <MenubarItem shortcut="shift+f5" onClick={() => handleCommand("debug.stop")}>
-            {t("menu.stopDebugging")}
-          </MenubarItem>
-          <MenubarItem shortcut="f9" onClick={() => handleCommand("debug.toggleBreakpoint")}>
-            {t("menu.toggleBreakpoint")}
           </MenubarItem>
         </MenubarContent>
       ),
@@ -555,13 +539,9 @@ const WindowMenuBar = ({
         {Object.entries(menus).map(([menuName, menuContent]) => (
           <MenubarMenu key={menuName} value={menuName}>
             <MenubarTrigger
-              disabled={
-                (menuName === "Terminal" && !isBackendCapabilityAvailable("terminal")) ||
-                (menuName === "Run" && !isBackendCapabilityAvailable("debugger"))
-              }
+              disabled={menuName === "Terminal" && !isBackendCapabilityAvailable("terminal")}
               title={
-                (menuName === "Terminal" && !isBackendCapabilityAvailable("terminal")) ||
-                (menuName === "Run" && !isBackendCapabilityAvailable("debugger"))
+                menuName === "Terminal" && !isBackendCapabilityAvailable("terminal")
                   ? BACKEND_UNAVAILABLE_TOOLTIP
                   : undefined
               }

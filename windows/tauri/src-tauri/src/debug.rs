@@ -1247,7 +1247,6 @@ fn adapter_identifier(command: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Stdio;
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -1945,7 +1944,12 @@ mod tests {
 
     #[test]
     fn derives_adapter_identifier_from_the_executable_name() {
+        // The identifier drops the directory and extension. Windows uses
+        // backslashes and `.exe`; the macOS host passes Unix-style paths.
+        #[cfg(windows)]
         assert_eq!(adapter_identifier(r"C:\tools\bun.exe"), "bun");
+        #[cfg(not(windows))]
+        assert_eq!(adapter_identifier("/usr/local/bin/bun"), "bun");
         assert_eq!(adapter_identifier("python"), "python");
         assert_eq!(adapter_identifier(""), "custom");
     }

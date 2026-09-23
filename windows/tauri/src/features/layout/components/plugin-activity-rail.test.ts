@@ -15,11 +15,8 @@ test("right activity rail opens the real singleton Extensions buffer", async () 
   expect(layoutSource).toContain("<PluginActivityRail />");
 });
 
-test("right activity rail places Maven in the upper right tool group", async () => {
+test("right activity rail keeps Extensions and Notifications without Maven", async () => {
   const railSource = await Bun.file(new URL("./plugin-activity-rail.tsx", import.meta.url)).text();
-  const sidebarSource = await Bun.file(
-    new URL("./sidebar/sidebar-pane-selector.tsx", import.meta.url),
-  ).text();
   const transparencyStyles = await Bun.file(
     new URL("../../../styles/window-transparency.css", import.meta.url),
   ).text();
@@ -29,18 +26,15 @@ test("right activity rail places Maven in the upper right tool group", async () 
   );
   expect(railSource).toContain('<PuzzlePieceIcon className="size-4.5" />');
   expect(railSource).toContain("<NotificationsTrigger />");
-  expect(railSource).toContain('<PackageIcon className="size-4.5" />');
-  expect(railSource).toContain("active={isMavenActive}");
-  expect(railSource).toContain("aria-pressed={isMavenActive}");
-  expect(railSource).toContain("onClick={toggleMavenPane}");
-  expect(railSource.indexOf('<PackageIcon className="size-4.5" />')).toBeGreaterThan(
-    railSource.indexOf("<NotificationsTrigger />"),
-  );
-  expect(sidebarSource).toContain('id: "maven"');
+  // Java/Maven left the double-ended workbench, so the rail must not import the
+  // Maven store or render a Maven button any more.
+  expect(railSource).not.toContain("useMavenStore");
+  expect(railSource).not.toContain("PackageIcon");
+  expect(railSource).not.toContain("toggleMavenPane");
   expect(transparencyStyles).toContain(".lithe-plugin-activity-rail");
 });
 
-test("left activity rail restores retained Maven output separately", async () => {
+test("the activity rail exposes no Maven or Run entry points", async () => {
   const sidebarSource = await Bun.file(
     new URL("./sidebar/sidebar-pane-selector.tsx", import.meta.url),
   ).text();
@@ -48,50 +42,26 @@ test("left activity rail restores retained Maven output separately", async () =>
     new URL("./sidebar/main-sidebar.tsx", import.meta.url),
   ).text();
 
-  expect(mainSidebarSource).toContain("const hasMavenRun = useMavenStore");
-  expect(mainSidebarSource).toContain(
-    "onMavenClick={hasMavenRun ? () => toggleMavenRunPane() : undefined}",
-  );
-  expect(sidebarSource).toContain("onClick: onMavenClick");
-  expect(sidebarSource).toContain('id: "maven"');
-  expect(sidebarSource).toContain("isActive: isMavenActive");
+  expect(mainSidebarSource).not.toContain("hasMavenRun");
+  expect(mainSidebarSource).not.toContain("toggleMavenRunPane");
+  expect(mainSidebarSource).not.toContain("toggleRunPane");
+  expect(sidebarSource).not.toContain('id: "maven"');
+  expect(sidebarSource).not.toContain('id: "run"');
+  expect(sidebarSource).not.toContain("onMavenClick");
+  expect(sidebarSource).not.toContain("onRunClick");
 });
 
-test("Maven navigation stays right while task output uses the bottom pane", async () => {
-  const railSource = await Bun.file(new URL("./plugin-activity-rail.tsx", import.meta.url)).text();
+test("the bottom pane hosts neither Maven nor the debugger", async () => {
   const layoutSource = await Bun.file(new URL("./main-layout.tsx", import.meta.url)).text();
   const bottomPaneSource = await Bun.file(
     new URL("./bottom-pane/bottom-pane.tsx", import.meta.url),
   ).text();
-  const mavenPaneSource = await Bun.file(
-    new URL("../../maven/components/maven-pane.tsx", import.meta.url),
-  ).text();
-  const mavenRunPaneSource = await Bun.file(
-    new URL("../../maven/components/maven-run-pane.tsx", import.meta.url),
-  ).text();
 
-  expect(railSource).toContain(
-    'state.isRightSidebarVisible && state.activeRightSidebarView === "maven"',
-  );
-  expect(layoutSource).toContain('activeRightSidebarView === "maven"');
-  expect(layoutSource).toContain("hidden={!isRightToolWindowVisible}");
-  expect(layoutSource).toContain("<MavenPane onClose={closeMavenToolWindow} />");
-  expect(layoutSource).not.toContain(
-    'if (!isBottomPaneVisible || bottomPaneActiveTab !== "maven") return;',
-  );
-  expect(bottomPaneSource).toContain('bottomPaneActiveTab === "maven"');
-  expect(bottomPaneSource).toContain("<MavenRunPane />");
-  expect(mavenPaneSource).toContain(
-    "export default function MavenPane({ onClose }: MavenPaneProps)",
-  );
-  expect(mavenPaneSource).toContain("openMavenRunPane();");
-  expect(mavenPaneSource).not.toContain("RunOutputText");
-  expect(mavenPaneSource).not.toContain("showBuildOutput");
-  expect(mavenPaneSource).not.toContain("actions.clearOutput");
-  expect(mavenPaneSource).not.toContain('className="w-[17rem]');
-  expect(mavenRunPaneSource).toContain("useMavenStore");
-  expect(mavenRunPaneSource).toContain("<RunOutputText");
-  expect(mavenRunPaneSource).toContain("actions.clearOutput");
-  expect(mavenRunPaneSource).toContain("actions.stop()");
-  expect(mavenRunPaneSource).not.toContain("ensureMavenProcessListeners");
+  expect(layoutSource).not.toContain("MavenPane");
+  expect(layoutSource).not.toContain("closeMavenToolWindow");
+  expect(layoutSource).not.toContain("initializeDebuggerEventBridge");
+  expect(bottomPaneSource).not.toContain("MavenRunPane");
+  expect(bottomPaneSource).not.toContain("RunPane");
+  expect(bottomPaneSource).not.toContain("DebuggerView");
+  expect(bottomPaneSource).not.toContain("debuggerEnabled");
 });

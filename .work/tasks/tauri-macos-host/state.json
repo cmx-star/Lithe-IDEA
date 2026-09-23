@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "taskId": "tauri-macos-host",
+  "title": "新增 macOS Tauri 宿主并移除工作台 Java 入口",
+  "status": "awaiting_user_review",
+  "stage": "review",
+  "createdAt": "2026-09-22T10:24:43Z",
+  "updatedAt": "2026-09-22T12:00:00Z"
+}

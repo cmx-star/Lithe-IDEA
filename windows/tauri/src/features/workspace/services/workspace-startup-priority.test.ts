@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bootstrapWorkspaceGit, runGitBeforeJava } from "./workspace-startup-priority";
+import { bootstrapWorkspaceGit, runWorkspaceGitBootstrap } from "./workspace-startup-priority";
 
 type Deferred = {
   promise: Promise<void>;
@@ -14,43 +14,37 @@ function deferred(): Deferred {
   return { promise, resolve };
 }
 
-test("starts Java only after the initial Git bootstrap completes", async () => {
+test("waits for the Git bootstrap before reporting that the workspace is current", async () => {
   const gitBootstrap = deferred();
   const events: string[] = [];
-  const startup = runGitBeforeJava({
+  const startup = runWorkspaceGitBootstrap({
     bootstrapGit: async () => {
       events.push("git-started");
       await gitBootstrap.promise;
       events.push("git-finished");
     },
     isCurrent: () => true,
-    startJava: () => events.push("java-started"),
   });
 
   expect(events).toEqual(["git-started"]);
   gitBootstrap.resolve();
 
   expect(await startup).toBe("started");
-  expect(events).toEqual(["git-started", "git-finished", "java-started"]);
+  expect(events).toEqual(["git-started", "git-finished"]);
 });
 
-test("does not start Java when the workspace changes during Git bootstrap", async () => {
+test("reports superseded when the workspace changes during the Git bootstrap", async () => {
   const gitBootstrap = deferred();
   let current = true;
-  let javaStarts = 0;
-  const startup = runGitBeforeJava({
+  const startup = runWorkspaceGitBootstrap({
     bootstrapGit: () => gitBootstrap.promise,
     isCurrent: () => current,
-    startJava: () => {
-      javaStarts += 1;
-    },
   });
 
   current = false;
   gitBootstrap.resolve();
 
   expect(await startup).toBe("superseded");
-  expect(javaStarts).toBe(0);
 });
 
 test("loads every discovered repository before publishing workspace Git status", async () => {
@@ -77,23 +71,29 @@ test("loads every discovered repository before publishing workspace Git status",
   ]);
 });
 
-test("starts Java after a failed Git attempt without hiding the failure", async () => {
+test("forwards a Git failure without hiding it or aborting the caller", async () => {
   const failure = new Error("Git status timed out");
   const errors: unknown[] = [];
-  let javaStarts = 0;
 
-  const result = await runGitBeforeJava({
+  const result = await runWorkspaceGitBootstrap({
     bootstrapGit: async () => {
       throw failure;
     },
     isCurrent: () => true,
     onGitBootstrapError: (error) => errors.push(error),
-    startJava: () => {
-      javaStarts += 1;
-    },
   });
 
   expect(result).toBe("started");
   expect(errors).toEqual([failure]);
-  expect(javaStarts).toBe(1);
+});
+
+test("tolerates a Git failure when no error handler is supplied", async () => {
+  const result = await runWorkspaceGitBootstrap({
+    bootstrapGit: async () => {
+      throw new Error("Git status timed out");
+    },
+    isCurrent: () => true,
+  });
+
+  expect(result).toBe("started");
 });

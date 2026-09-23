@@ -2,18 +2,13 @@ import { initializeDocumentWatches, cleanupDocumentWatches } from "@/features/ed
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { dirname } from "@tauri-apps/api/path";
 import { workspaceRuntimeRegistry } from "@/features/workspace/runtime/workspace-runtime-registry";
-import { useMavenStore } from "@/features/maven/stores/maven.store";
-import { getBaseName, getRelativePath, pathStartsWithRoot } from "@/utils/path-helpers";
+import { pathStartsWithRoot } from "@/utils/path-helpers";
 import { useFileTreeStore } from "@/features/file-explorer/stores/file-explorer-tree.store";
 import { useFileSystemStore } from "../stores/file-system.store";
 import {
   cancelFileWatcherRefreshes,
   scheduleFileWatcherRefresh,
 } from "./file-watcher-refresh-scheduler";
-import {
-  cancelJavaWorkspaceChanges,
-  scheduleJavaWorkspaceChange,
-} from "@/features/editor/lsp/java-workspace-change-scheduler";
 
 type FileChangeType = "opened" | "reloaded" | "deleted" | "rescan";
 
@@ -31,20 +26,6 @@ export interface PendingWorkspaceRefresh {
 }
 
 const pendingWorkspaceRefreshes = new Map<string, PendingWorkspaceRefresh>();
-
-export function getMavenPomChangePath(
-  path: string,
-  rootFolderPath: string | undefined,
-): string | null {
-  if (
-    !rootFolderPath ||
-    !pathStartsWithRoot(path, rootFolderPath) ||
-    getBaseName(path).toLowerCase() !== "pom.xml"
-  ) {
-    return null;
-  }
-  return getRelativePath(path, rootFolderPath);
-}
 
 export function getWorkspaceRootForChange(
   path: string,
@@ -161,23 +142,12 @@ export async function initializeFileWatcherListener() {
     }
 
     const parentDirectory = await dirname(path);
-    const mavenPomPath = getMavenPomChangePath(path, workspaceRoot);
 
     window.dispatchEvent(
       new CustomEvent("file-external-change", {
         detail: { path, event_type },
       }),
     );
-
-    if (mavenPomPath !== null) {
-      useMavenStore.getStore(workspaceId).getState().actions.markPomReloadRequired(mavenPomPath);
-    } else {
-      scheduleJavaWorkspaceChange(workspaceId, workspaceRoot, {
-        path,
-        kind: event_type === "deleted" ? "deleted" : event_type === "opened" ? "created" : "changed",
-        includeSource: true,
-      });
-    }
 
     const refreshRequest = getFileTreeRefreshRequest(event_type, workspaceRoot, parentDirectory);
     if (refreshRequest) {
@@ -195,7 +165,6 @@ export async function cleanupFileWatcherListener() {
   await cleanupDocumentWatches();
   cancelFileWatcherRefreshes();
   pendingWorkspaceRefreshes.clear();
-  cancelJavaWorkspaceChanges();
 
   if (!unlistenFileChanged) {
     return;

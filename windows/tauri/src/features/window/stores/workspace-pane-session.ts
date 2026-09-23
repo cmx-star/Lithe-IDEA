@@ -171,6 +171,44 @@ const addBuffersToPaneNode = (
   };
 };
 
+const collapseMainEditorLayout = (layout: PaneLayoutSnapshot): PaneLayoutSnapshot => {
+  const editorPanes = getAllPaneGroups(layout.root);
+  const activeEditorPane = findPaneGroup(layout.root, layout.activePaneId);
+  const bufferIds = unique(editorPanes.flatMap((pane) => pane.bufferIds));
+  const bufferIdSet = new Set(bufferIds);
+  const activeBufferId =
+    activeEditorPane?.activeBufferId && bufferIdSet.has(activeEditorPane.activeBufferId)
+      ? activeEditorPane.activeBufferId
+      : (editorPanes.find((pane) => pane.activeBufferId)?.activeBufferId ?? null);
+  const previewBufferId =
+    activeEditorPane?.previewBufferId && bufferIdSet.has(activeEditorPane.previewBufferId)
+      ? activeEditorPane.previewBufferId
+      : null;
+
+  return {
+    ...layout,
+    root: {
+      id: ROOT_PANE_ID,
+      type: "group",
+      bufferIds,
+      activeBufferId,
+      mruBufferIds: unique(editorPanes.flatMap((pane) => pane.mruBufferIds ?? [])).filter(
+        (bufferId) => bufferIdSet.has(bufferId),
+      ),
+      pinnedBufferIds: unique(editorPanes.flatMap((pane) => pane.pinnedBufferIds ?? [])).filter(
+        (bufferId) => bufferIdSet.has(bufferId),
+      ),
+      previewBufferId,
+    },
+    activePaneId: ROOT_PANE_ID,
+    fullscreenPaneId: null,
+    mostRecentActivePaneIds: [
+      ROOT_PANE_ID,
+      ...(layout.mostRecentActivePaneIds ?? []).filter((paneId) => paneId !== ROOT_PANE_ID),
+    ],
+  };
+};
+
 const attachMissingBuffersToLayout = (
   layout: PaneLayoutSnapshot,
   buffers: PaneContent[],
@@ -245,13 +283,13 @@ export const buildPaneLayoutFromSession = (
   );
 
   return attachMissingBuffersToLayout(
-    {
+    collapseMainEditorLayout({
       root: hydratePaneNode(paneState.root, bufferIdByPath),
       bottomRoot: hydratePaneNode(paneState.bottomRoot, bufferIdByPath),
       activePaneId: paneState.activePaneId,
       mostRecentActivePaneIds: paneState.mostRecentActivePaneIds,
       fullscreenPaneId: paneState.fullscreenPaneId,
-    },
+    }),
     buffers,
   );
 };

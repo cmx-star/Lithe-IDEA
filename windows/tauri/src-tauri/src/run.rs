@@ -21,6 +21,9 @@ use tauri::{AppHandle, Emitter, Manager};
 
 mod launch_arguments;
 
+// cmd.exe creation flags and argv quoting are only reachable from the Windows
+// branch of `batch_command`; the macOS host still compiles this module.
+#[cfg_attr(not(windows), allow(dead_code))]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const RUN_OUTPUT_FLUSH_INTERVAL: Duration = Duration::from_millis(100);
 const RUN_OUTPUT_HIGH_WATER_BYTES: usize = 1_048_576;
@@ -643,12 +646,47 @@ fn validate_write_target(root: &Path, target: &Path) -> Result<(), String> {
         .parent()
         .map(normalize_path)
         .unwrap_or_else(|| root.clone());
-    let root_text = root.to_string_lossy().to_ascii_lowercase();
-    let parent_text = parent.to_string_lossy().to_ascii_lowercase();
-    if parent_text != root_text && !parent_text.starts_with(&(root_text.clone() + "\\")) {
+    // Compare path components instead of a string prefix. A hardcoded `\`
+    // separator rejects every descendant on macOS, where `/` is the separator.
+    // Windows keeps its case-insensitive comparison because `Path` equality is
+    // case-sensitive there.
+    if !path_is_within(&root, &parent) {
         return Err("Refusing to write outside the project directory.".into());
     }
     Ok(())
+}
+
+fn path_is_within(root: &Path, candidate: &Path) -> bool {
+    let mut root_components = root.components();
+    let mut candidate_components = candidate.components();
+    loop {
+        match (root_components.next(), candidate_components.next()) {
+            // Every root component matched and the candidate has no more parts:
+            // the candidate is the root itself.
+            (None, None) => return true,
+            // The candidate is a strict descendant of the fully matched root.
+            (None, Some(_)) => return true,
+            // The candidate is shallower than the root.
+            (Some(_), None) => return false,
+            (Some(left), Some(right)) => {
+                if !path_components_equal(left, right) {
+                    return false;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+fn path_components_equal(left: std::path::Component<'_>, right: std::path::Component<'_>) -> bool {
+    left.as_os_str()
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
+}
+
+#[cfg(not(windows))]
+fn path_components_equal(left: std::path::Component<'_>, right: std::path::Component<'_>) -> bool {
+    left == right
 }
 
 pub(crate) fn atomic_write(path: &Path, contents: &[u8]) -> Result<(), String> {
@@ -1487,6 +1525,7 @@ fn batch_command(executable: &str, arguments: &[String]) -> Command {
     command
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 fn batch_command_line(executable: &str, arguments: &[String]) -> String {
     let mut inner = String::from("call ");
     inner.push_str(&quote_windows_arg(executable));
@@ -1497,6 +1536,7 @@ fn batch_command_line(executable: &str, arguments: &[String]) -> String {
     format!("\"{inner}\"")
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 fn quote_windows_arg(argument: &str) -> String {
     if argument.is_empty() {
         return "\"\"".into();
@@ -1994,12 +2034,27 @@ mod tests {
 
     #[test]
     fn workspace_relative_paths_use_forward_slashes() {
-        let root = PathBuf::from(r"C:\project");
-        let file = PathBuf::from(r"C:\project\src\main\java\App.java");
-        assert_eq!(
-            workspace_relative(&root, &file).as_deref(),
-            Some("src/main/java/App.java")
-        );
+        // The contract is that identifiers never contain a platform separator.
+        // Windows paths exercise the backslash conversion; the macOS host has
+        // no backslash separator, so it checks the same contract on its own paths.
+        #[cfg(windows)]
+        {
+            let root = PathBuf::from(r"C:\project");
+            let file = PathBuf::from(r"C:\project\src\main\java\App.java");
+            assert_eq!(
+                workspace_relative(&root, &file).as_deref(),
+                Some("src/main/java/App.java")
+            );
+        }
+        #[cfg(not(windows))]
+        {
+            let root = PathBuf::from("/project");
+            let file = PathBuf::from("/project/src/main/java/App.java");
+            assert_eq!(
+                workspace_relative(&root, &file).as_deref(),
+                Some("src/main/java/App.java")
+            );
+        }
     }
 
     #[test]

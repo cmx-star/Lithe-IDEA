@@ -9,7 +9,6 @@ import {
   SIDEBAR_BOTTOM_ACTIVITY_ITEM_IDS,
   normalizeItemOrder,
 } from "@/features/layout/config/item-order";
-import { RunIcon } from "@/features/run/components/run-icon";
 import { useSettingsStore } from "@/features/settings/stores/settings.store";
 import { SidebarListItem } from "@/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/ui/tabs";
@@ -19,7 +18,6 @@ import {
   GitGraphIcon,
   FilesIcon,
   MagnifyingGlassIcon,
-  PackageIcon,
   TerminalWindowIcon,
   WarningIcon,
 } from "@/ui/icons";
@@ -69,10 +67,6 @@ interface SidebarPaneSelectorProps {
   isTerminalActive?: boolean;
   onDiagnosticsClick?: () => void;
   isDiagnosticsActive?: boolean;
-  onRunClick?: () => void;
-  isRunActive?: boolean;
-  onMavenClick?: () => void;
-  isMavenActive?: boolean;
   compact?: boolean;
   showLabels?: boolean;
   orientation?: "horizontal" | "vertical";
@@ -93,10 +87,6 @@ export const SidebarPaneSelector = ({
   isTerminalActive = false,
   onDiagnosticsClick,
   isDiagnosticsActive = false,
-  onRunClick,
-  isRunActive = false,
-  onMavenClick,
-  isMavenActive = false,
   compact = false,
   showLabels = false,
   orientation = "horizontal",
@@ -219,39 +209,6 @@ export const SidebarPaneSelector = ({
             } satisfies SidebarPaneItem,
           ]
         : []),
-      ...(onRunClick
-        ? [
-            {
-              id: "run",
-              label: showLabels ? t("workbench.run") : undefined,
-              icon: <RunIcon className={iconClassName} />,
-              isActive: isRunActive,
-              onClick: onRunClick,
-              ariaLabel: t("workbench.run"),
-              tooltip: {
-                content: t("workbench.run"),
-                shortcut: "Shift+F10",
-                side: tooltipSide,
-              },
-            } satisfies SidebarPaneItem,
-          ]
-        : []),
-      ...(onMavenClick
-        ? [
-            {
-              id: "maven",
-              label: showLabels ? `${t("run.title")} - ${t("maven.title")}` : undefined,
-              icon: <PackageIcon className={iconClassName} />,
-              isActive: isMavenActive,
-              onClick: onMavenClick,
-              ariaLabel: `${t("run.title")} - ${t("maven.title")}`,
-              tooltip: {
-                content: `${t("run.title")} - ${t("maven.title")}`,
-                side: tooltipSide,
-              },
-            } satisfies SidebarPaneItem,
-          ]
-        : []),
       ...(onSettingsClick
         ? [
             {
@@ -285,11 +242,7 @@ export const SidebarPaneSelector = ({
       isTerminalActive,
       onDiagnosticsClick,
       isDiagnosticsActive,
-      onRunClick,
       onSettingsClick,
-      isRunActive,
-      onMavenClick,
-      isMavenActive,
       onViewChange,
       showLabels,
       t,

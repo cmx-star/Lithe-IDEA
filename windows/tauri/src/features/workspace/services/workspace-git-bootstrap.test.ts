@@ -4,7 +4,6 @@ import { useFileSystemStore } from "@/features/file-system/stores/file-system.st
 import { clearRepositoryDiscoveryCache } from "@/features/git/api/git-repo-api";
 import { useGitStore } from "@/features/git/stores/git.store";
 import { createFileTreeGitStatusLookup, getFileTreeEntryGitStatusDecoration } from "@/features/file-explorer/lib/file-tree-git-status";
-import { resolveEditorLspLaunch } from "@/features/editor/lsp/resolve-editor-lsp-launch";
 import { workspaceRuntimeRegistry } from "../runtime/workspace-runtime-registry";
 import { ensureWorkspaceGitBootstrap } from "./workspace-git-bootstrap";
 
@@ -27,12 +26,6 @@ const invoke = mock(async (command: string, args?: Record<string, unknown>) => {
   }
   throw new Error(`Unexpected native operation: ${command}`);
 });
-const resolveJavaLspLaunch = mock(async () => ({
-  providerId: "java", languageId: "java", executablePath: "C:/runtime/java.exe",
-  arguments: [], environment: {}, cacheDirectory: "C:/runtime/cache",
-}));
-const mavenLaunchContextForWorkspace = mock(async () => null);
-const dependencies = { ensureWorkspaceGitBootstrap, resolveJavaLspLaunch, mavenLaunchContextForWorkspace };
 let invokeSpy: ReturnType<typeof spyOn<typeof tauriCore, "invoke">>;
 
 function openRuntime() {
@@ -56,8 +49,6 @@ beforeEach(() => {
   interceptStatus = undefined;
   discoveredRepos = [scope.root, childRepo];
   invoke.mockClear();
-  resolveJavaLspLaunch.mockClear();
-  mavenLaunchContextForWorkspace.mockClear();
   invokeSpy = spyOn(tauriCore, "invoke").mockImplementation(invoke as typeof tauriCore.invoke);
 });
 
@@ -67,7 +58,7 @@ afterEach(() => {
   workspaceRuntimeRegistry.resetForTests();
 });
 
-test("restored Java documents and background startup share Git readiness and root decorations", async () => {
+test("concurrent startup shares one Git readiness pass and root decorations", async () => {
   const childStarted = deferred();
   const releaseChild = deferred();
   interceptStatus = async (repoPath) => {
@@ -76,18 +67,15 @@ test("restored Java documents and background startup share Git readiness and roo
       await releaseChild.promise;
     }
   };
-  const launch = resolveEditorLspLaunch(`${scope.root}/src/Main.java`, scope, dependencies);
-  const tasks: Promise<unknown>[] = [launch];
+  const first = ensureWorkspaceGitBootstrap(scope);
+  const tasks: Promise<unknown>[] = [first];
   try {
     await childStarted.promise;
-    const background = ensureWorkspaceGitBootstrap(scope);
-    tasks.push(background);
-    expect(resolveJavaLspLaunch).not.toHaveBeenCalled();
-    expect(mavenLaunchContextForWorkspace).not.toHaveBeenCalled();
+    const second = ensureWorkspaceGitBootstrap(scope);
+    tasks.push(second);
     releaseChild.resolve();
-    expect(await background).toBe("published");
-    expect(await launch).not.toBeNull();
-    expect(mavenLaunchContextForWorkspace).toHaveBeenCalledTimes(1);
+    expect(await first).toBe("published");
+    expect(await second).toBe("published");
     const snapshot = useGitStore.getStore(scope.workspaceId).getState().workspaceGitStatus!;
     expect(getFileTreeEntryGitStatusDecoration(
       { name: "Main.java", path: `${scope.root}/src/Main.java`, isDir: false },
@@ -104,25 +92,22 @@ test("restored Java documents and background startup share Git readiness and roo
   }
 }, 1000);
 
-test("Git failure is recorded once and still permits Maven and Java preparation", async () => {
+test("Git failure is recorded once and leaves the workspace status empty", async () => {
   interceptStatus = async () => { throw new Error("Operation timed out"); };
   const errorLog = spyOn(console, "error").mockImplementation(() => {});
   try {
-    expect(await resolveEditorLspLaunch(`${scope.root}/src/Main.java`, scope, dependencies)).not.toBeNull();
     expect(await ensureWorkspaceGitBootstrap(scope)).toBe("failed");
     expect(errorLog).toHaveBeenCalledTimes(1);
-    expect(mavenLaunchContextForWorkspace).toHaveBeenCalledTimes(1);
     expect(useGitStore.getStore(scope.workspaceId).getState().workspaceGitStatus).toBeNull();
   } finally {
     errorLog.mockRestore();
   }
 });
 
-test("a workspace without repositories permits Java without requesting Git status", async () => {
+test("a workspace without repositories skips requesting Git status", async () => {
   discoveredRepos = [];
-  expect(await resolveEditorLspLaunch(`${scope.root}/src/Main.java`, scope, dependencies)).not.toBeNull();
+  expect(await ensureWorkspaceGitBootstrap(scope)).toBe("published");
   expect(invoke.mock.calls.filter(([command]) => command === "git_status")).toHaveLength(0);
-  expect(mavenLaunchContextForWorkspace).toHaveBeenCalledTimes(1);
 });
 
 test("changing workspace folders discards pending results and allows a fresh bootstrap", async () => {
@@ -134,7 +119,7 @@ test("changing workspace folders discards pending results and allows a fresh boo
       await releaseChild.promise;
     }
   };
-  const launch = resolveEditorLspLaunch(`${scope.root}/src/Main.java`, scope, dependencies);
+  const bootstrap = ensureWorkspaceGitBootstrap(scope);
   try {
     await childStarted.promise;
     useFileSystemStore.getStore(scope.workspaceId).setState({
@@ -144,20 +129,19 @@ test("changing workspace folders discards pending results and allows a fresh boo
       ],
     });
     releaseChild.resolve();
-    expect(await launch).toBeNull();
-    expect(mavenLaunchContextForWorkspace).not.toHaveBeenCalled();
+    expect(await bootstrap).toBe("superseded");
     expect(useGitStore.getStore(scope.workspaceId).getState().workspaceGitStatus).toBeNull();
     // Removing the extra folder restores the old roots on the same runtime.
-    // Its superseded task must not suppress the next Java launch forever.
+    // Its superseded pass must not suppress the next bootstrap forever.
     openRuntime();
     expect(await ensureWorkspaceGitBootstrap(scope)).toBe("published");
   } finally {
     releaseChild.resolve();
-    await Promise.allSettled([launch]);
+    await Promise.allSettled([bootstrap]);
   }
 }, 1000);
 
-test("closing a workspace during bootstrap suppresses Java launch and reopening starts fresh", async () => {
+test("closing a workspace during bootstrap suppresses publication and reopening starts fresh", async () => {
   const childStarted = deferred();
   const releaseChild = deferred();
   interceptStatus = async (repoPath) => {
@@ -167,14 +151,12 @@ test("closing a workspace during bootstrap suppresses Java launch and reopening 
     }
   };
   const oldGitStore = useGitStore.getStore(scope.workspaceId);
-  const launch = resolveEditorLspLaunch(`${scope.root}/src/Main.java`, scope, dependencies);
+  const bootstrap = ensureWorkspaceGitBootstrap(scope);
   try {
     await childStarted.promise;
     workspaceRuntimeRegistry.removeWorkspace(scope.workspaceId);
     releaseChild.resolve();
-    expect(await launch).toBeNull();
-    expect(resolveJavaLspLaunch).not.toHaveBeenCalled();
-    expect(mavenLaunchContextForWorkspace).not.toHaveBeenCalled();
+    await bootstrap;
     expect(oldGitStore.getState().workspaceGitStatus).toBeNull();
     const reads = invoke.mock.calls.filter(([command]) => command === "git_status").length;
     openRuntime();
@@ -182,6 +164,6 @@ test("closing a workspace during bootstrap suppresses Java launch and reopening 
     expect(invoke.mock.calls.filter(([command]) => command === "git_status")).toHaveLength(reads * 2);
   } finally {
     releaseChild.resolve();
-    await Promise.allSettled([launch]);
+    await Promise.allSettled([bootstrap]);
   }
 }, 1000);

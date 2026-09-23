@@ -10,6 +10,8 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev --config src-tauri/tauri.windows.conf.json",
     "desktop:build": "tauri build --config src-tauri/tauri.windows.conf.json",
+    "desktop:dev:macos": "tauri dev --config src-tauri/tauri.macos.conf.json",
+    "desktop:build:macos": "tauri build --config src-tauri/tauri.macos.conf.json",
     "typecheck": "tsc --noEmit",
     "lint": "bunx vp lint .",
     "format": "bunx vp fmt --write ."

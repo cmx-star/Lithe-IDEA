@@ -2,7 +2,6 @@ interface WorkspaceStartupPriorityOptions {
   bootstrapGit: () => Promise<void>;
   isCurrent: () => boolean;
   onGitBootstrapError?: (error: unknown) => void;
-  startJava: () => void;
 }
 
 interface WorkspaceGitBootstrapOptions<Value> {
@@ -32,11 +31,13 @@ export async function bootstrapWorkspaceGit<Value>({
   return "published";
 }
 
-export async function runGitBeforeJava({
+/// Runs the workspace Git bootstrap and reports whether the result still applies
+/// to the workspace the caller activated. A Git failure is forwarded to
+/// `onGitBootstrapError` instead of aborting the caller's background work.
+export async function runWorkspaceGitBootstrap({
   bootstrapGit,
   isCurrent,
   onGitBootstrapError,
-  startJava,
 }: WorkspaceStartupPriorityOptions): Promise<"started" | "superseded"> {
   try {
     await bootstrapGit();
@@ -45,6 +46,5 @@ export async function runGitBeforeJava({
   }
   if (!isCurrent()) return "superseded";
 
-  startJava();
   return "started";
 }

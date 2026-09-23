@@ -82,8 +82,8 @@ export async function ensureWorkspaceGitBootstrap(
     frontendTrace("error", "workspace-open", "gitBootstrap:failed", {
       ...traceContext, durationMs: Math.round(performance.now() - startedAt),
     });
-    console.error("Failed to bootstrap workspace Git before Java:", error);
-    // Git failure must not permanently disable Java language services.
+    console.error("Failed to bootstrap workspace Git status:", error);
+    // Git failure must not permanently disable the rest of the workspace.
     return "failed";
   }).finally(() => {
     bootstrap.settled = true;

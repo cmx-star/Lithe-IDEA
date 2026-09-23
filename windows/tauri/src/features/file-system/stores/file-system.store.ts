@@ -1,5 +1,4 @@
 import { invoke } from "@/platform/tauri-core";
-import { LspOperationLog } from "@/platform/lsp-session-lifecycle";
 import { basename, dirname, extname, join } from "@tauri-apps/api/path";
 import { copyFile, readFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -53,7 +52,7 @@ import { workspaceRuntimeRegistry } from "@/features/workspace/runtime/workspace
 import { workspaceSessionRepository } from "@/features/workspace/persistence/workspace-session-repository";
 import { switchWorkspaceRuntime } from "@/features/workspace/services/workspace-lifecycle";
 import { scheduleWorkspacePrewarm } from "@/features/workspace/services/workspace-prewarm";
-import { runGitBeforeJava } from "@/features/workspace/services/workspace-startup-priority";
+import { runWorkspaceGitBootstrap } from "@/features/workspace/services/workspace-startup-priority";
 import { ensureWorkspaceGitBootstrap } from "@/features/workspace/services/workspace-git-bootstrap";
 import {
   createWorkspaceScopedStore,
@@ -454,58 +453,6 @@ const initializeLocalWorkspaceInBackground = (
     gitStore.getState().actions.setWorkspaceGitStatus(null, path);
   }
 
-  const startJavaWorkspaceDetection = () => {
-    void (async () => {
-      const operation = new LspOperationLog("javaWorkspaceDetection", crypto.randomUUID(), {
-        workspaceId,
-        workspacePath: path,
-        languageId: "java",
-      });
-      try {
-        const projectFiles = await get().getAllProjectFiles();
-        if (!isCurrentActivation()) {
-          operation.cancelled("workspace-activation-superseded");
-          return;
-        }
-
-        const [{ getRelativePath, pathStartsWithRoot }, { resolveJavaWorkspacePolicy },
-          { getJavaWorkspaceLanguageServerOwner }, { loadMavenProjectForWorkspace }] = await Promise.all([
-          import("@/utils/path-helpers"),
-          import("@/platform/java-workspace-policy"),
-          import("@/features/editor/lsp/java-workspace-language-server"),
-          import("@/features/maven/stores/maven.store"),
-        ]);
-        const workspaceFiles = projectFiles.filter(
-          (entry) => !entry.isDir && pathStartsWithRoot(entry.path, path),
-        );
-        const relativeToAbsolute = new Map(
-          workspaceFiles.map((entry) => [getRelativePath(entry.path, path), entry.path]),
-        );
-        await loadMavenProjectForWorkspace(path, [...relativeToAbsolute.keys()], workspaceId);
-        if (!isCurrentActivation()) {
-          operation.cancelled("workspace-activation-superseded");
-          return;
-        }
-        const policy = await resolveJavaWorkspacePolicy([...relativeToAbsolute.keys()]);
-        const javaFile = policy.representativeJavaPath
-          ? relativeToAbsolute.get(policy.representativeJavaPath)
-          : undefined;
-        if (!policy.shouldStart || !javaFile) {
-          operation.cancelled("java-workspace-not-detected");
-          return;
-        }
-
-        operation.succeeded({ representativeJavaPath: policy.representativeJavaPath });
-        await getJavaWorkspaceLanguageServerOwner().prewarm(
-          { workspaceId, root: path },
-          javaFile,
-        );
-      } catch (error) {
-        operation.failed(error);
-      }
-    })();
-  };
-
   return (async () => {
     const backgroundInitStartedAt = performance.now();
     logWorkspaceOpenStep("start", "backgroundInit", path);
@@ -546,7 +493,7 @@ const initializeLocalWorkspaceInBackground = (
         return;
       }
 
-      await runGitBeforeJava({
+      await runWorkspaceGitBootstrap({
         bootstrapGit: async () => {
           const gitState = gitStore.getState();
           if (
@@ -570,9 +517,8 @@ const initializeLocalWorkspaceInBackground = (
           if (isCurrentActivation()) {
             gitStore.getState().actions.setWorkspaceGitStatus(null, path);
           }
-          console.error("Failed to bootstrap workspace Git before Java:", error);
+          console.error("Failed to bootstrap workspace Git status:", error);
         },
-        startJava: startJavaWorkspaceDetection,
       });
       logWorkspaceOpenStep("end", "backgroundInit", path, backgroundInitStartedAt);
     } catch (error) {

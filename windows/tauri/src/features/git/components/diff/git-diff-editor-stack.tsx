@@ -316,7 +316,6 @@ const GitDiffEditorStack = memo(function GitDiffEditorStack({
     return getBufferById(state.buffers, state.activeBufferId);
   });
   const updateBufferContent = useBufferStore.use.actions().updateBufferContent;
-  const closeBuffer = useBufferStore.use.actions().closeBuffer;
   const rootFolderPath = useFileSystemStore((state) => state.rootFolderPath);
   const isFindVisible = useUIState((state) => state.isFindVisible);
   const setIsFindVisible = useUIState((state) => state.setIsFindVisible);
@@ -670,7 +669,9 @@ const GitDiffEditorStack = memo(function GitDiffEditorStack({
       }
 
       if (!hasRenderableDiff(nextDiff)) {
-        closeBuffer(activeBuffer.id);
+        // The status watcher can publish while the working-tree diff loader is
+        // still resolving this file. Keep the opened review visible rather
+        // than closing its tab because a transient empty result arrived first.
         return;
       }
 
@@ -691,7 +692,6 @@ const GitDiffEditorStack = memo(function GitDiffEditorStack({
     }
   }, [
     activeBuffer,
-    closeBuffer,
     isWorkingTree,
     isWorkingTreeBuffer,
     multiDiff.title,

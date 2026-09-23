@@ -20,7 +20,9 @@ C 符号、模块 ID、能力 ID 或插件入口名称。
 ## 决策
 
 macOS 是当前参考产品。Windows 是独立的 React/Tauri 实现，不得导入
-Swift 源码，也不得依赖 macOS 类型。
+Swift 源码，也不得依赖 macOS 类型。`windows/tauri` 的 React 工作台现在
+也能作为独立 macOS 应用启动，具体边界和 Java 能力退出的取舍见
+[双端 Tauri 工作台与 Java 能力退出](2026-09-22-dual-ended-tauri-workbench.md)。
 
 仓库采用以下所有权边界：
 
@@ -34,7 +36,7 @@ Swift 源码，也不得依赖 macOS 类型。
 | `macos/Sources/Lithe/Platform/MacOS/` | macOS 适配器和组合根 |
 | `rust/lithe-core/` | 确定性的共享命令、模型、校验和 C ABI |
 | `rust/lithe-git-host/` | 原生 Git 子进程、管道、临时输入和有界清理 |
-| `windows/` | React/Tauri Windows 产品和 Windows Rust 适配器 |
+| `windows/` | React/Tauri 双端工作台和 Windows 专属 Rust 适配器；macOS 宿主只复用前端 |
 | `Plugins/mac/` | macOS 所有的插件包 |
 | `Plugins/win/` | Windows 所有的插件包 |
 | `frontend/editor/` | 两端共同依赖的 Monaco 表现层、分词与编辑器模型；不调用平台 API |

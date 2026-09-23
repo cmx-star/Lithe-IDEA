@@ -323,7 +323,9 @@ export function PaneContainer({ pane }: PaneContainerProps) {
   const { closeBufferForce, openTerminalBuffer } = useBufferStore.use.actions();
   const rootFolderPath = useFileSystemStore.use.rootFolderPath?.();
   const handleFileOpen = useFileSystemStore.use.handleFileOpen?.();
-  const horizontalBufferCarousel = useSettingsStore((state) => state.settings.horizontalTabScroll);
+  // `horizontalTabScroll` controls the tab-strip wheel behavior only. It must
+  // never turn the editor into a multi-file card carousel.
+  const horizontalBufferCarousel = false;
   const webViewerEnabled = useSettingsStore((state) => state.settings.coreFeatures.webViewer);
 
   const [isDragOver, setIsDragOver] = useState(false);

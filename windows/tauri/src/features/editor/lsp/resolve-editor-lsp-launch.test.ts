@@ -4,52 +4,55 @@ import { resolveEditorLspLaunch } from "./resolve-editor-lsp-launch";
 
 afterEach(() => workspaceRuntimeRegistry.resetForTests());
 
-const resolveJavaLspLaunch = mock(async () => ({
-  providerId: "java",
-  languageId: "java",
-  executablePath: "C:/Lithe/jdtls/bin/jdtls.bat",
-  arguments: [],
-  runtimeExecutablePath: "C:/Lithe/jdk/bin/java.exe",
-  cacheDirectory: "C:/Users/example/AppData/Local/Lithe/jdtls",
-  environment: { JAVA_HOME: "C:/Lithe/jdk" },
-  workspaceFingerprint: "workspace-fingerprint",
+const getExtensionForFilePath = mock(() => undefined);
+const getLspServerPath = mock((_filePath: string): string | null => null);
+const getLanguageId = mock((_filePath: string): string | null => null);
+const getLspServerArgs = mock(() => [] as string[]);
+const getLspInitializationOptions = mock(() => undefined);
+
+mock.module("@/extensions/registry/extension-registry", () => ({
+  extensionRegistry: {
+    getExtensionForFilePath,
+    getLspServerPath,
+    getLanguageId,
+    getLspServerArgs,
+    getLspInitializationOptions,
+  },
 }));
-const mavenLaunchContextForWorkspace = mock(async () => ({
-  version: 1 as const,
-  reactorPath: ".",
-  profiles: ["dev"],
-  settingsPath: "C:/Users/example/.m2/settings.xml",
-  skipTests: true,
-  mavenExecutablePath: "D:/Tools/apache-maven",
-  javaHomePath: "C:/Java/jdk-21",
+mock.module("@/extensions/registry/extension-store-runtime", () => ({
+  getLanguageToolConfigSet: () => undefined,
 }));
 
-test("resolves workspace A Maven context while workspace B is active", async () => {
-  workspaceRuntimeRegistry.activateWorkspace({ id: "workspace-b", name: "B" }, "ready");
-  const launch = await resolveEditorLspLaunch(
-    "D:/work-a/src/App.java",
-    {
-      workspaceId: "workspace-a",
-      root: "D:/work-a",
-    },
-    {
-      resolveJavaLspLaunch,
-      mavenLaunchContextForWorkspace,
-      ensureWorkspaceGitBootstrap: async () => "skipped",
-    },
-  );
+const scope = { workspaceId: "workspace-a", root: "D:/work-a" };
 
-  expect(workspaceRuntimeRegistry.getActiveWorkspaceId()).toBe("workspace-b");
-  expect(mavenLaunchContextForWorkspace).toHaveBeenCalledWith(
-    "D:/work-a",
-    ["src/App.java"],
-    "workspace-a",
-  );
-  expect(launch?.mavenContext).toEqual(
-    expect.objectContaining({
-      profiles: ["dev"],
-      settingsPath: "C:/Users/example/.m2/settings.xml",
-      skipTests: true,
-    }),
-  );
+test("a Java file no longer starts JDTLS or Maven from the editor path", async () => {
+  getLspServerPath.mockImplementation(() => null);
+  getLanguageId.mockImplementation(() => null);
+
+  const launch = await resolveEditorLspLaunch("D:/work-a/src/App.java", scope);
+
+  expect(launch).toBeNull();
+  // The removed Java branch used to bypass the extension registry entirely and
+  // resolve jdtls plus a Maven launch context. The editor must consult the
+  // registry for every language now, so a Java file without a registered
+  // server resolves to nothing instead of silently starting a Java toolchain.
+  expect(getLspServerPath).toHaveBeenCalledWith("D:/work-a/src/App.java");
+});
+
+test("a registered language still resolves through the extension registry", async () => {
+  getLspServerPath.mockImplementation(() => "C:/servers/rust-analyzer.exe");
+  getLanguageId.mockImplementation(() => "rust");
+  getLspServerArgs.mockImplementation(() => ["--stdio"]);
+  getLspInitializationOptions.mockImplementation(() => ({ linkedProjects: [] }));
+
+  const launch = await resolveEditorLspLaunch("D:/work-a/src/main.rs", scope);
+
+  expect(launch).toEqual({
+    providerId: "rust",
+    languageId: "rust",
+    serverPath: "C:/servers/rust-analyzer.exe",
+    serverArgs: ["--stdio"],
+    initializationOptions: { linkedProjects: [] },
+    tools: undefined,
+  });
 });

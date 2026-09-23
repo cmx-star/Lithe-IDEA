@@ -482,24 +482,6 @@ export const createSettingsActions = (params: SettingsActionsParams): Action[] =
       },
     },
     {
-      id: "toggle-debugger-feature",
-      label: settings.coreFeatures.debugger
-        ? "Features: Disable Debugger"
-        : "Features: Enable Debugger",
-      description: settings.coreFeatures.debugger
-        ? "Disable run and debug panel"
-        : "Enable run and debug panel",
-      icon: <AlertCircle />,
-      category: "Features",
-      action: () => {
-        updateSetting("coreFeatures", {
-          ...settings.coreFeatures,
-          debugger: !settings.coreFeatures.debugger,
-        });
-        onClose();
-      },
-    },
-    {
       id: "toggle-outline-feature",
       label: settings.coreFeatures.outline
         ? "Features: Disable Outline"

@@ -292,11 +292,22 @@ pub async fn create_app_window(app: AppHandle, request: Option<Value>) -> Result
     } else {
         format!("index.html?{query}")
     };
-    let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(path.into()))
+    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(path.into()))
         .title("Lithe")
-        .decorations(false)
-        .inner_size(1280.0, 800.0)
-        .min_inner_size(720.0, 480.0)
+        .inner_size(1280.0, 800.0);
+    builder = builder.min_inner_size(720.0, 480.0);
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .decorations(true)
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        builder = builder.decorations(false);
+    }
+    let window = builder
         .icon(WINDOW_TASKBAR_ICON)
         .map_err(|error| error.to_string())?
         .build()

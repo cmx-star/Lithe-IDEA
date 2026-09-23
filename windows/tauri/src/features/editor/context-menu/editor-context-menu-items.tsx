@@ -11,7 +11,6 @@ import {
   TextIndentIcon as Indent,
   TextOutdentIcon as Outdent,
   PencilLineIcon as PenLine,
-  PlayIcon as Play,
   ArrowCounterClockwiseIcon as RotateCcw,
   ScissorsIcon as Scissors,
   MagnifyingGlassIcon as Search,
@@ -48,8 +47,6 @@ export interface EditorContextMenuHandlers {
   onMoveLineUp?: () => void;
   onMoveLineDown?: () => void;
   onToggleBookmark?: () => void;
-  onRunTestClass?: () => void;
-  onRunTestMethod?: () => void;
 }
 
 export interface EditorContextMenuItemOptions extends EditorContextMenuHandlers {
@@ -100,8 +97,6 @@ export function buildEditorContextMenuItems({
   onMoveLineUp,
   onMoveLineDown,
   onToggleBookmark,
-  onRunTestClass,
-  onRunTestMethod,
 }: EditorContextMenuItemOptions): MenuItem[] {
   return [
     {
@@ -128,27 +123,6 @@ export function buildEditorContextMenuItems({
       disabled: isDisabled(onPaste),
       onClick: onPaste ?? noop,
     },
-    ...(onRunTestClass
-      ? [
-          separator("sep-tests"),
-          {
-            id: "run-test-class",
-            label: t("maven.runTestClass"),
-            icon: <Play />,
-            onClick: onRunTestClass,
-          },
-          ...(onRunTestMethod
-            ? [
-                {
-                  id: "run-test-method",
-                  label: t("maven.runTestMethod"),
-                  icon: <Play />,
-                  onClick: onRunTestMethod,
-                },
-              ]
-            : []),
-        ]
-      : []),
     {
       id: "delete",
       label: t("files.delete"),

@@ -1,10 +1,7 @@
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isBackendCapabilityAvailable } from "@/config/backend-capabilities";
-import DebuggerView from "@/features/debugger/components/debugger-view";
 import DiagnosticsBuffer from "@/features/diagnostics/components/diagnostics-buffer";
-import MavenRunPane from "@/features/maven/components/maven-run-pane";
-import RunPane from "@/features/run/components/run-pane";
 import { useBufferStore } from "@/features/editor/stores/buffer.store";
 import { useTranslation } from "@/i18n/locale-provider";
 import { GitLogToolWindow } from "@/features/git/components/log/git-log-tool-window";
@@ -31,7 +28,6 @@ const BottomPane = () => {
   const bottomPaneActiveTab = useUIState((state) => state.bottomPaneActiveTab);
   const rootFolderPath = useProjectStore((state) => state.rootFolderPath);
   const terminalEnabled = useSettingsStore((state) => state.settings.coreFeatures.terminal);
-  const debuggerEnabled = useSettingsStore((state) => state.settings.coreFeatures.debugger);
   const bottomRoot = usePaneStore.use.bottomRoot();
   const bottomPaneBufferIds = useMemo(() => {
     const bufferIds: string[] = [];
@@ -68,32 +64,12 @@ const BottomPane = () => {
   useEffect(() => {
     if (
       isBottomPaneVisible &&
-      bottomPaneActiveTab === "debugger" &&
-      (!debuggerEnabled || !isBackendCapabilityAvailable("debugger"))
-    ) {
-      useUIState.getState().setIsBottomPaneVisible(false);
-    }
-  }, [bottomPaneActiveTab, isBottomPaneVisible, debuggerEnabled]);
-
-  useEffect(() => {
-    if (
-      isBottomPaneVisible &&
       bottomPaneActiveTab === "terminal" &&
       (!terminalEnabled || !isBackendCapabilityAvailable("terminal"))
     ) {
       useUIState.getState().setIsBottomPaneVisible(false);
     }
   }, [bottomPaneActiveTab, isBottomPaneVisible, terminalEnabled]);
-
-  useEffect(() => {
-    if (
-      isBottomPaneVisible &&
-      bottomPaneActiveTab === "run" &&
-      !isBackendCapabilityAvailable("run")
-    ) {
-      useUIState.getState().setIsBottomPaneVisible(false);
-    }
-  }, [bottomPaneActiveTab, isBottomPaneVisible]);
 
   useEffect(() => {
     if (
@@ -261,26 +237,6 @@ const BottomPane = () => {
             onFullScreen={() => setIsFullScreen(!isFullScreen)}
             isFullScreen={isFullScreen}
           />
-        )}
-
-        {debuggerEnabled &&
-          isBackendCapabilityAvailable("debugger") &&
-          bottomPaneActiveTab === "debugger" && (
-            <div className="h-full">
-              <DebuggerView />
-            </div>
-          )}
-
-        {bottomPaneActiveTab === "run" && isBackendCapabilityAvailable("run") && (
-          <div className="h-full">
-            <RunPane />
-          </div>
-        )}
-
-        {bottomPaneActiveTab === "maven" && (
-          <div className="h-full">
-            <MavenRunPane />
-          </div>
         )}
 
         {bottomPaneActiveTab === "diagnostics" && (

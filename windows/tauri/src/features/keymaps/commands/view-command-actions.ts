@@ -1,6 +1,5 @@
 import { useBufferStore } from "@/features/editor/stores/buffer.store";
 import { editorAPI } from "@/features/editor/extensions/api";
-import { toggleMavenToolWindow } from "@/features/maven/actions/maven-tool-window-actions";
 import { openNotificationsToolWindow } from "@/features/notifications/actions/notifications-tool-window-actions";
 import { useSettingsStore } from "@/features/settings/stores/settings.store";
 import { useWhatsNewStore } from "@/features/settings/stores/whats-new.store";
@@ -26,20 +25,6 @@ export function toggleSidebar(): void {
 export function toggleActivitySidebar(): void {
   const { settings, actions } = useSettingsStore.getState();
   void actions.updateSetting("activityRailExpanded", !settings.activityRailExpanded);
-}
-
-export function toggleRunPane(): void {
-  const state = useUIState.getState();
-  if (state.isBottomPaneVisible && state.bottomPaneActiveTab === "run") {
-    state.setIsBottomPaneVisible(false);
-  } else {
-    state.setBottomPaneActiveTab("run");
-    state.setIsBottomPaneVisible(true);
-  }
-}
-
-export function toggleMavenPane(): void {
-  toggleMavenToolWindow();
 }
 
 export function toggleTerminalPane(): void {

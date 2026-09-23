@@ -25,7 +25,7 @@ describe("footer item order", () => {
 });
 
 describe("sidebar activity order", () => {
-  test("keeps Maven output in the left sidebar visibility order", () => {
+  test("exposes the editor workbench without Maven or Run", () => {
     expect(
       sidebarActivityVisibilityItemIds({
         search: true,
@@ -33,35 +33,24 @@ describe("sidebar activity order", () => {
         terminal: true,
         diagnostics: true,
       }),
-    ).toEqual([
-      "files",
-      "git",
-      "search",
-      "maven",
-      "run",
-      "terminal",
-      "diagnostics",
-      "gitLog",
-      "settings",
-    ]);
-    expect([...SIDEBAR_ACTIVITY_ITEM_IDS]).toContain("maven");
+    ).toEqual(["files", "git", "search", "terminal", "diagnostics", "gitLog", "settings"]);
+    expect([...SIDEBAR_ACTIVITY_ITEM_IDS]).not.toContain("maven");
+    expect([...SIDEBAR_ACTIVITY_ITEM_IDS]).not.toContain("run");
   });
 
-  test("hides and restores Run independently", () => {
-    const hidden = setSidebarActivityItemVisibility([], "run", false);
+  test("hides and restores Terminal independently", () => {
+    const hidden = setSidebarActivityItemVisibility([], "terminal", false);
 
-    expect(hidden).toEqual(["run"]);
-    expect(setSidebarActivityItemVisibility(hidden, "run", true)).toEqual([]);
+    expect(hidden).toEqual(["terminal"]);
+    expect(setSidebarActivityItemVisibility(hidden, "terminal", true)).toEqual([]);
   });
 
   test("does not expose an unavailable Database placeholder", () => {
     expect([...SIDEBAR_ACTIVITY_ITEM_IDS]).not.toContain("database");
   });
 
-  test("places Maven output before Run, Terminal, Diagnostics, Git Log, then Settings", () => {
+  test("keeps Terminal, Diagnostics, Git Log, then Settings at the rail bottom", () => {
     expect([...SIDEBAR_BOTTOM_ACTIVITY_ITEM_IDS]).toEqual([
-      "maven",
-      "run",
       "terminal",
       "diagnostics",
       "gitLog",
@@ -69,10 +58,8 @@ describe("sidebar activity order", () => {
     ]);
   });
 
-  test("keeps Maven output in a persisted left sidebar order", () => {
+  test("drops persisted Maven and Run ids from a stored sidebar order", () => {
     expect(normalizeItemOrder(["maven", "run"], SIDEBAR_ACTIVITY_ITEM_IDS)).toEqual([
-      "maven",
-      "run",
       "files",
       "git",
       "search",

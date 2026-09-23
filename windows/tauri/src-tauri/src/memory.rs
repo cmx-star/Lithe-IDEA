@@ -284,11 +284,53 @@ mod warning_tests {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+mod platform {
+    use super::ApplicationMemoryUsage;
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+
+    pub(super) fn application_memory_usage() -> Result<ApplicationMemoryUsage, String> {
+        let pid = sysinfo::get_current_pid().map_err(|error| error.to_string())?;
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::new().with_memory(),
+        );
+        // `Process::memory` is the resident set size in bytes, which is the
+        // macOS equivalent of the private working set the Windows host reports.
+        let resident_bytes = system
+            .process(pid)
+            .map(|process| process.memory())
+            .filter(|bytes| *bytes > 0)
+            .ok_or_else(|| "Unable to read macOS process resident memory".to_string())?;
+        Ok(ApplicationMemoryUsage {
+            lithe_bytes: resident_bytes,
+            total_bytes: resident_bytes,
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::application_memory_usage;
+
+        #[test]
+        fn current_process_resident_size_is_available() {
+            let usage = application_memory_usage()
+                .expect("current process resident memory should be readable");
+
+            assert!(usage.lithe_bytes > 0);
+            // macOS samples a single process, so the aggregate equals the process value.
+            assert_eq!(usage.total_bytes, usage.lithe_bytes);
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 mod platform {
     use super::ApplicationMemoryUsage;
 
     pub(super) fn application_memory_usage() -> Result<ApplicationMemoryUsage, String> {
-        Err("Application memory usage is available only on Windows".to_string())
+        Err("Application memory usage is available only on Windows and macOS".to_string())
     }
 }

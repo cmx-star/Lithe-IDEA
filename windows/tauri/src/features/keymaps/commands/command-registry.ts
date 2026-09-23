@@ -13,12 +13,6 @@ import {
 } from "@/features/panes/utils/pane-command-actions";
 import { useUIState } from "@/features/window/stores/ui-state.store";
 import {
-  startGeneratedDebugSession,
-  stopDebugSession,
-  toggleActiveBreakpoint,
-  toggleDebuggerPane,
-} from "./debug-command-actions";
-import {
   closeActiveTab,
   closeAllTabs,
   closeCurrentWindow,
@@ -88,7 +82,6 @@ import {
   promptGoToLine,
 } from "./navigation-command-actions";
 import {
-  rebuildJavaIndex,
   restartAllLanguageServers,
   stopAllLanguageServers,
 } from "./lsp-command-actions";
@@ -111,7 +104,6 @@ import {
   toggleLineNumbers,
   toggleMinimap,
   toggleRenderWhitespace,
-  toggleRunPane,
   toggleSidebar,
   toggleSourceControlSidebar,
   toggleTerminalPane,
@@ -320,15 +312,6 @@ const lspCommands: Command[] = [
     description: "Stop every active language server",
     execute: () => {
       void stopAllLanguageServers();
-    },
-  },
-  {
-    id: "java.rebuildIndex",
-    title: "Java: Rebuild Index",
-    category: "Java",
-    description: "Clear the Java language server index and rebuild it on next use",
-    execute: () => {
-      void rebuildJavaIndex();
     },
   },
 ];
@@ -573,13 +556,6 @@ const viewCommands: Command[] = [
     execute: toggleSidebar,
   },
   {
-    id: "workbench.toggleRun",
-    title: "Toggle Run",
-    category: "View",
-    keybinding: "shift+f10",
-    execute: toggleRunPane,
-  },
-  {
     id: "workbench.toggleTerminal",
     title: "Toggle Terminal",
     category: "View",
@@ -686,34 +662,6 @@ const viewCommands: Command[] = [
     title: "Show Docker",
     category: "View",
     execute: toggleDockerSidebar,
-  },
-  {
-    id: "workbench.showDebugger",
-    title: "Show Run and Debug",
-    category: "View",
-    keybinding: "cmd+shift+d",
-    execute: toggleDebuggerPane,
-  },
-  {
-    id: "debug.start",
-    title: "Start Debugging",
-    category: "Debug",
-    keybinding: "F5",
-    execute: startGeneratedDebugSession,
-  },
-  {
-    id: "debug.stop",
-    title: "Stop Debugging",
-    category: "Debug",
-    keybinding: "shift+F5",
-    execute: stopDebugSession,
-  },
-  {
-    id: "debug.toggleBreakpoint",
-    title: "Toggle Breakpoint",
-    category: "Debug",
-    keybinding: "F9",
-    execute: toggleActiveBreakpoint,
   },
   {
     id: "workbench.showThemeSelector",
