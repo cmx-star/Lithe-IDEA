@@ -401,8 +401,8 @@ export const EditorSettings = () => {
         </SettingRow>
 
         <SettingRow
-          label={t("settings.editor.bufferCarousel")}
-          description={t("settings.editor.bufferCarouselDescription")}
+          label={t("settings.editor.horizontalTabScroll")}
+          description={t("settings.editor.horizontalTabScrollDescription")}
           onReset={() =>
             updateSetting("horizontalTabScroll", getDefaultSetting("horizontalTabScroll"))
           }

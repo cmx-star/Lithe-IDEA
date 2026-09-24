@@ -2149,6 +2149,9 @@ const catalogs = {
     "settings.editor.solid": "Solid",
     "settings.editor.maxOpenTabs": "Max Open Tabs",
     "settings.editor.maxOpenTabsDescription": "Maximum number of tabs before oldest closes",
+    "settings.editor.horizontalTabScroll": "Scroll tabs with mouse wheel",
+    "settings.editor.horizontalTabScrollDescription":
+      "Scroll the tab bar horizontally using the mouse wheel",
     "settings.editor.bufferCarousel": "Buffer Carousel",
     "settings.editor.bufferCarouselDescription":
       "Show open buffers as a horizontally scrollable carousel in the main view",
@@ -6490,6 +6493,8 @@ const catalogs = {
     "settings.editor.solid": "常亮",
     "settings.editor.maxOpenTabs": "最大打开标签数",
     "settings.editor.maxOpenTabsDescription": "达到此数量后关闭最早的标签页",
+    "settings.editor.horizontalTabScroll": "滚轮滚动标签栏",
+    "settings.editor.horizontalTabScrollDescription": "在标签栏上使用鼠标滚轮时水平滚动标签",
     "settings.editor.bufferCarousel": "缓冲区轮播",
     "settings.editor.bufferCarouselDescription": "在主视图中将打开的缓冲区显示为可横向滚动的轮播",
     "settings.editor.autoSave": "自动保存",
