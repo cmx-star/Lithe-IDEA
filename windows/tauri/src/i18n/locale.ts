@@ -1789,6 +1789,7 @@ const catalogs = {
     "settings.tabs.updates": "Updates",
     "settings.mac.categories": "Settings categories",
     "settings.mac.restoreDefaults": "Restore Defaults",
+    "settings.mac.restoreDefaultsConfirm": "⚠️ Are you sure you want to restore all settings?",
     "settings.mac.done": "Done",
     "settings.mac.appearance": "Appearance",
     "settings.mac.colorTheme": "Color theme",
