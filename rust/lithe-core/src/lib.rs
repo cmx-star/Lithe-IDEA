@@ -11,6 +11,7 @@ mod git;
 mod github;
 mod languages;
 mod lsp;
+pub mod pi;
 pub mod plugins;
 mod project;
 mod protocol;
