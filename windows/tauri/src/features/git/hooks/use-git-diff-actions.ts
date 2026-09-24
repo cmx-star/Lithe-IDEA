@@ -173,7 +173,8 @@ export function useGitDiffActions({
             totalFiles: 0,
             totalAdditions: 0,
             totalDeletions: 0,
-            fileKeys: [],
+            fileKeys: [fileKey],
+            initiallySelectedFileKey: fileKey,
             initiallyExpandedFileKey: fileKey,
             isLoading: true,
             indexingProgress: {

@@ -26,7 +26,7 @@ export const useDiffData = (): UseDiffDataReturn => {
     if (!state.activeBufferId) return null;
     return getBufferById(state.buffers, state.activeBufferId);
   });
-  const { updateBufferContent, closeBuffer } = useBufferStore.use.actions();
+  const { updateBufferContent } = useBufferStore.use.actions();
   const rootFolderPath = useFileSystemStore.use.rootFolderPath?.();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -106,9 +106,6 @@ export const useDiffData = (): UseDiffDataReturn => {
 
         if (otherViewDiff && otherViewDiff.lines.length > 0) {
           switchToView(isStaged ? "unstaged" : "staged");
-          setTimeout(() => closeBuffer(activeBuffer.id), 100);
-        } else {
-          closeBuffer(activeBuffer.id);
         }
       }
     } catch (err) {
@@ -125,7 +122,6 @@ export const useDiffData = (): UseDiffDataReturn => {
     isWorkingTreeFileDiff,
     activeBuffer,
     updateBufferContent,
-    closeBuffer,
     switchToView,
     t,
   ]);

@@ -90,6 +90,8 @@ export async function loadWorkingTreeDiffsProgressively({
       totalAdditions: stats.additions,
       totalDeletions: stats.deletions,
       fileKeys: loadedDiffs.map((item) => item.fileKey),
+      initiallySelectedFileKey:
+        initiallyExpandedFileKey ?? loadedDiffs[0]?.fileKey,
       initiallyExpandedFileKey:
         initiallyExpandedFileKey ?? loadedDiffs[0]?.fileKey,
       isLoading,

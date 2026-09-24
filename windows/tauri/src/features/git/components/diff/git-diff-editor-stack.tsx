@@ -43,7 +43,7 @@ import {
 } from "@/ui/dropdown";
 import Tooltip from "@/ui/tooltip";
 import { SEARCH_TOGGLE_ICONS, SearchPopover } from "@/ui/search";
-import { getFileDiff } from "../../api/git-diff-api";
+import { getFileDiff, getUntrackedFileDiff } from "../../api/git-diff-api";
 import { getRemotes } from "../../api/git-remotes-api";
 import { isGitChangeRelevant, subscribeToGitChanges } from "../../events/git-events";
 import type { MultiFileDiff } from "../../types/git-diff.types";
@@ -537,7 +537,10 @@ const GitDiffEditorStack = memo(function GitDiffEditorStack({
     [isWorkingTree],
   );
   useEffect(() => {
-    const initialFileKey = multiDiff.initiallySelectedFileKey;
+    const initialFileKey =
+      multiDiff.initiallySelectedFileKey ??
+      multiDiff.initiallyExpandedFileKey ??
+      (multiDiff.files[0] ? getMultiDiffSectionKey(multiDiff, multiDiff.files[0], 0) : null);
     if (!initialFileKey) return;
 
     handleSelectFileFromTree(initialFileKey);
@@ -646,26 +649,31 @@ const GitDiffEditorStack = memo(function GitDiffEditorStack({
     if (
       !isWorkingTree ||
       !isWorkingTreeBuffer ||
-      !rootFolderPath ||
       !activeBuffer ||
       !selectedDiffFile
     ) {
       return;
     }
+    const repoPath = multiDiff.repoPath ?? rootFolderPath;
+    if (!repoPath) return;
     if (isRefreshingRef.current) return;
 
     isRefreshingRef.current = true;
 
     try {
-      gitDiffCache.invalidate(rootFolderPath);
+      gitDiffCache.invalidate(repoPath);
       const selectedFileKey = selectedDiffFile.sectionKey;
       const selectedFilePath = selectedFileKey.replace(/^(staged|unstaged):/, "");
       let isStaged = selectedFileKey.startsWith("staged:");
-      let nextDiff = await getFileDiff(rootFolderPath, selectedFilePath, isStaged);
+      let nextDiff = await getFileDiff(repoPath, selectedFilePath, isStaged);
 
       if (!hasRenderableDiff(nextDiff)) {
         isStaged = !isStaged;
-        nextDiff = await getFileDiff(rootFolderPath, selectedFilePath, isStaged);
+        nextDiff = await getFileDiff(repoPath, selectedFilePath, isStaged);
+      }
+
+      if (!hasRenderableDiff(nextDiff)) {
+        nextDiff = await getUntrackedFileDiff(repoPath, selectedFilePath);
       }
 
       if (!hasRenderableDiff(nextDiff)) {
@@ -681,7 +689,7 @@ const GitDiffEditorStack = memo(function GitDiffEditorStack({
         "",
         false,
         createSingleFileWorkingTreeDiff({
-          repoPath: rootFolderPath,
+          repoPath,
           fileKey: nextFileKey,
           diff: nextDiff,
           title: multiDiff.title,
@@ -694,6 +702,7 @@ const GitDiffEditorStack = memo(function GitDiffEditorStack({
     activeBuffer,
     isWorkingTree,
     isWorkingTreeBuffer,
+    multiDiff.repoPath,
     multiDiff.title,
     rootFolderPath,
     selectedDiffFile,

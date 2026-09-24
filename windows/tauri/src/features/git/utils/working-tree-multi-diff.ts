@@ -46,6 +46,7 @@ export const createSingleFileWorkingTreeDiff = ({
     totalAdditions: stats.additions,
     totalDeletions: stats.deletions,
     fileKeys: [fileKey],
+    initiallySelectedFileKey: fileKey,
     initiallyExpandedFileKey: fileKey,
     isLoading: false,
   };
