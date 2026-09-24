@@ -32,7 +32,7 @@ describe("Git Log workbench entry points", () => {
   });
 
   test("places Git Log on the bottom activity rail above Settings", () => {
-    expect(SIDEBAR_BOTTOM_ACTIVITY_ITEM_IDS.indexOf("run")).toBeLessThan(
+    expect(SIDEBAR_BOTTOM_ACTIVITY_ITEM_IDS.indexOf("terminal")).toBeLessThan(
       SIDEBAR_BOTTOM_ACTIVITY_ITEM_IDS.indexOf("gitLog"),
     );
     expect(SIDEBAR_BOTTOM_ACTIVITY_ITEM_IDS.indexOf("gitLog")).toBeLessThan(

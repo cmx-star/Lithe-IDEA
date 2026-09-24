@@ -8,7 +8,7 @@ const getExtensionForFilePath = mock(() => undefined);
 const getLspServerPath = mock((_filePath: string): string | null => null);
 const getLanguageId = mock((_filePath: string): string | null => null);
 const getLspServerArgs = mock(() => [] as string[]);
-const getLspInitializationOptions = mock(() => undefined);
+const getLspInitializationOptions = mock((_filePath?: string): Record<string, unknown> | undefined => undefined);
 
 mock.module("@/extensions/registry/extension-registry", () => ({
   extensionRegistry: {
