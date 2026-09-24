@@ -16,3 +16,4 @@ docs/visual-qa/
 reasonix.toml
 .codex/
 /node_modules/
+.work/
